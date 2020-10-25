@@ -572,4 +572,12 @@ ADD CONSTRAINT tblEmployee_chkEmployeeMiddleName CHECK (REPLACE(EmployeeMiddleNa
 
 ALTER TABLE tblEmployee WITH NOCHECK
 ADD CONSTRAINT tblEmployee_DateOfBirth CHECK (DateOfBirth BETWEEN '1990-01-01' AND GETDATE())
+
+-- Add CHECK CONSTRAINT when creating table
+CREATE TABLE tblEmployee2 (
+    MiddleName nVarchar(20) NULL CONSTRAINT tblEmployee2_chkMiddleName CHECK (REPLACE(MiddleName, '.', '') = MiddleName OR MiddleName IS NULL),
+    DateOfTransaction smalldatetime NOT NULL,
+    EmployeeNum INT NOT NULL,
+    DateOfEntery DateTime NOT NULL CONSTRAINT tblTransaction2_dfDateOfEntry DEFAULT GETDATE()
+)
 ```

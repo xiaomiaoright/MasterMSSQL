@@ -3721,3 +3721,11 @@ INSERT INTO tblEmployee
 VALUES (2002, 'A','B','C','D','2115-10-01','Accounting')
 
 ROLLBACK TRAN
+
+
+CREATE TABLE tblEmployee2 (
+    MiddleName nVarchar(20) NULL CONSTRAINT tblEmployee2_chkMiddleName CHECK (REPLACE(MiddleName, '.', '') = MiddleName OR MiddleName IS NULL),
+    DateOfTransaction smalldatetime NOT NULL,
+    EmployeeNum INT NOT NULL,
+    DateOfEntery DateTime NOT NULL CONSTRAINT tblTransaction2_dfDateOfEntry DEFAULT GETDATE()
+)
