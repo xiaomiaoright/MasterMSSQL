@@ -3686,7 +3686,8 @@ ALTER TABLE tblTransaction
 ADD CONSTRAINT dfDateOfEntry DEFAULT GETDATE() for DateOfEntry
 
 
-CREATE TABLE tblTransaction2 (
+CREATE TABLE tblTransaction2
+(
     Amount smallmoney NOT NULL,
     DateOfTransaction smalldatetime NOT NULL,
     EmployeeNum INT NOT NULL,
@@ -3705,7 +3706,8 @@ ALTER TABLE tblTransaction
 ADD CONSTRAINT tblTransaction_chkAmount CHECK (Amount >-1000 AND AMOUNT <1000)
 
 INSERT INTO tblTransaction
-VALUES (-1010, '2010-01-01', 1)
+VALUES
+    (-1010, '2010-01-01', 1)
 
 ALTER TABLE tblEmployee WITH NOCHECK
 ADD CONSTRAINT tblEmployee_chkEmployeeMiddleName CHECK (REPLACE(EmployeeMiddleName, '.', '') = EmployeeMiddleName OR EmployeeMiddleName IS NULL)
@@ -3718,14 +3720,527 @@ ADD CONSTRAINT tblEmployee_DateOfBirth CHECK (DateOfBirth BETWEEN '1990-01-01' A
 BEGIN TRAN
 
 INSERT INTO tblEmployee
-VALUES (2002, 'A','B','C','D','2115-10-01','Accounting')
+VALUES
+    (2002, 'A', 'B', 'C', 'D', '2115-10-01', 'Accounting')
 
 ROLLBACK TRAN
 
 
-CREATE TABLE tblEmployee2 (
+CREATE TABLE tblEmployee2
+(
     MiddleName nVarchar(20) NULL CONSTRAINT tblEmployee2_chkMiddleName CHECK (REPLACE(MiddleName, '.', '') = MiddleName OR MiddleName IS NULL),
     DateOfTransaction smalldatetime NOT NULL,
     EmployeeNum INT NOT NULL,
     DateOfEntery DateTime NOT NULL CONSTRAINT tblTransaction2_dfDateOfEntry DEFAULT GETDATE()
 )
+
+-- Primary key is created default as clustered
+ALTER TABLE tblEmployee
+ADD CONSTRAINT PK_tblEmployee PRIMARY KEY (EmployeeNumber)
+
+-- TO create a non clustered Primary key 
+ALTER TABLE tblEmployee
+ADD CONSTRAINT PK_tblEmployee PRIMARY KEY NONCLUSTERED (EmployeeNumber)
+
+
+CREATE TABLE tblEmployee2
+(
+    EmployeeNumber INT NOT NULL CONSTRAINT PK_tblEmployee2 PRIMARY KEY IDENTITY(1,1),
+    MiddleName nVarchar(20) NULL CONSTRAINT tblEmployee2_chkMiddleName CHECK (REPLACE(MiddleName, '.', '') = MiddleName OR MiddleName IS NULL)
+)
+
+
+INSERT INTO tblEmployee2
+VALUES
+    ('Emily'),
+    -- with Identity 1
+    ('Tom')
+-- with identitty 2
+
+SELECT *
+FROM tblEmployee2
+--('Emily'),  with Identity 1
+--('Tom') with identitty 2
+
+-- Delelte Two rows and insert again
+DELETE FROM tblEmployee2
+
+INSERT INTO tblEmployee2
+VALUES
+    ('Emily'),
+    ('Tom')
+SELECT *
+FROM tblEmployee2
+-- Now identity is 3 and 4
+
+TRUNCATE TABLE tblEmployee2
+INSERT INTO tblEmployee2
+VALUES
+    ('Emily'),
+    ('Tom')
+SELECT *
+FROM tblEmployee2
+-- Now the identity is 1,2 again
+
+
+-- Try to insert manually the indentity
+INSERT INTO tblEmployee2
+VALUES
+    (3, 'Liang'),
+    (4, 'Jerry')
+-- result in an error because cannot insert identity when Identity_INSERT is OFF
+
+-- So set IDENTITY_INSERT to ON and insert
+SET IDENTITY_INSERT tblEmployee2 ON
+INSERT INTO tblEmployee2
+    (EmployeeNumber, MiddleName)
+VALUES
+    (3, 'Liang'),
+    (4, 'Jerry')
+
+-- Find the last identity used
+SELECT @@IDENTITY
+SELECT SCOPE_IDENTITY()
+
+-- Find out  last identity used for a specific table
+SELECT IDENT_CURRENT('dbo.tblEmployee2')
+
+
+BEGIN TRAN
+ALTER TABLE tblTransaction 
+ALTER COLUMN EmployeeNum INT NULL
+
+ALTER TABLE tblTransaction 
+ADD CONSTRAINT tblTransaction_dfEmployeeNum DEFAULT 124 FOR EmployeeNum
+
+ALTER TABLE tblTransaction WITH NOCHECK -- if there is invalid in current data, ignore it
+ADD CONSTRAINT FK_tblTransaction_EmployeeNum FOREIGN KEY (EmployeeNum)
+REFERENCES tblEmployee (EmployeeNumber)
+ON UPDATE CASCADE
+-- when primary key update, foreign key update
+-- Other options: ON UPDATE SET NULL
+ON DELETE NO ACTION
+-- Other options: ON DELETE CASCADE
+-- Other options: ON DELETE SET DEFAULT
+
+
+SELECT e.EmployeeNumber, t.*
+FROM tblEmployee e
+    RIGHT JOIN tblTransaction t
+    ON t.EmployeeNum = e.EmployeeNumber
+WHERE t.Amount IN (-179.47, 786.22)
+
+UPDATE tblEmployee SET EmployeeNumber = 9123 WHERE EmployeeNumber = 123
+
+SELECT e.EmployeeNumber, t.*
+FROM tblEmployee e
+    RIGHT JOIN tblTransaction t
+    ON t.EmployeeNum = e.EmployeeNumber
+WHERE t.Amount IN (-179.47, 786.22)
+
+ROLLBACK TRAN
+
+
+SELECT *
+FROM tblDepartment
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO
+
+CREATE VIEW vw_EmployeeTotalAmount
+AS
+    SELECT e.EmployeeNumber, ISNULL(SUM(t.Amount), 0) AS TotalAmount
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    GROUP BY e.EmployeeNumber
+GO
+
+SELECT *
+FROM vw_EmployeeTotalAmount
+
+-- find all views from sys
+IF EXISTS (SELECT *
+FROM sys.views
+WHERE name = 'vw_EmployeeTotalAmount')
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+
+
+SELECT *
+FROM sys.views
+-- with view name and view ID
+
+SELECT *
+FROM sys.syscomments
+-- with view id and view script
+
+SELECT v.*, c.text
+FROM sys.views v
+    INNER JOIN sys.syscomments c
+    ON c.id = v.object_id
+
+SELECT OBJECT_ID('dbo.vw_EmployeeTotalAmount'),
+    OBJECT_DEFINITION(OBJECT_ID('dbo.vw_EmployeeTotalAmount'))
+
+SELECT OBJECT_ID('dbo.vw_EmployeeTotalAmount')
+
+SELECT *
+FROM sys.sql_modules
+WHERE object_id = OBJECT_ID('dbo.vw_EmployeeTotalAmount')
+
+-- Secure view with WITH ENCRYPTION
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO
+
+CREATE VIEW vw_EmployeeTotalAmount
+WITH
+    ENCRYPTION
+AS
+    SELECT e.EmployeeNumber, ISNULL(SUM(t.Amount), 0) AS TotalAmount
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    GROUP BY e.EmployeeNumber
+GO
+
+-- if to get the view script now, it will show null
+SELECT OBJECT_ID('dbo.vw_EmployeeTotalAmount'),
+    OBJECT_DEFINITION(OBJECT_ID('dbo.vw_EmployeeTotalAmount'))
+
+SELECT *
+FROM sys.sql_modules
+WHERE object_id = OBJECT_ID('dbo.vw_EmployeeTotalAmount')
+
+UPDATE dbo.vw_EmployeeTotalAmount
+SET EmployeeNumber = 142
+WHERE EmployeeNumber = 132
+
+-- if the view script has filters on EmployeeNumber. For example, EmployeeNumber < 140. Then the updated rows won't show in the results.
+
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO
+
+CREATE VIEW vw_EmployeeTotalAmount
+WITH
+    ENCRYPTION
+AS
+    SELECT e.EmployeeNumber, ISNULL(SUM(t.Amount), 0) AS TotalAmount
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    WHERE e.EmployeeNumber BETWEEN 90 and 140
+    GROUP BY e.EmployeeNumber
+
+WITH CHECK OPTION
+
+GO
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeAmount]
+GO
+
+CREATE VIEW vw_EmployeeAmount
+WITH
+    ENCRYPTION
+AS
+    SELECT e.EmployeeNumber, t.*
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    WHERE e.EmployeeNumber BETWEEN 90 and 140
+
+WITH CHECK OPTION
+GO
+
+UPDATE dbo.vw_EmployeeAmount
+SET EmployeeNumber = 1442
+WHERE EmployeeNumber = 132
+
+IF EXISTS (SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE TABLE_NAME = 'vw_ViewByDepartment' AND TABLE_SCHEMA = 'dbo')
+    DROP VIEW dbo.vw_ViewByDepartment
+GO
+
+CREATE VIEW dbo.vw_ViewByDepartment
+WITH
+    SCHEMABINDING
+AS
+    SELECT d.Department, t.EmployeeNum, t.DateOfTransaction, t.Amount
+    FROM dbo.tblDepartment d
+        INNER JOIN dbo.tblEmployee e
+        ON e.Department = d.Department
+        INNER JOIN dbo.tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    WHERE t.EmployeeNum BETWEEN 120 AND 139
+GO
+
+-- TO create clustered index, the view must inclue schema (dbo.)
+-- view must not use OUter join, instead inner join only
+-- view msut be SCHEMABINDING, protect the underlining tables from alteration
+-- the columns selected in the index, behave like primary key. So combination need to be unique
+CREATE UNIQUE CLUSTERED INDEX inx_vw_ViewByDpartment ON dbo.vw_ViewByDepartment(EmployeeNum, Department,DateOfTransaction)
+
+IF EXISTS (SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE TABLE_NAME = 'vw_ViewByDepartment2' AND TABLE_SCHEMA = 'dbo')
+    DROP VIEW dbo.vw_ViewByDepartment2
+GO
+
+CREATE VIEW dbo.vw_ViewByDepartment2
+--WITH SCHEMABINDING
+AS
+    SELECT d.Department, t.EmployeeNum, t.DateOfTransaction, t.Amount
+    FROM dbo.tblDepartment d
+        INNER JOIN dbo.tblEmployee e
+        ON e.Department = d.Department
+        INNER JOIN dbo.tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    WHERE t.EmployeeNum BETWEEN 120 AND 139
+GO
+
+BEGIN TRAN
+DROP TABLE tblEmployee
+ROLLBACK TRAN
+
+
+CREATE PROC NameEmployee
+AS
+BEGIN
+    SELECT *
+    FROM tblEmployee
+END
+GO
+
+NameEmployee
+Exec NameEmployee
+Execute NameEmployee
+
+
+IF EXISTS (SELECT *
+FROM SYS.procedures
+WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+-- Or use OBJECT_ID
+-- IF OBJECT_ID('NameEmployee', 'p') IS NOT NULL
+--     DROP proc NameEmployee
+-- GO
+
+CREATE PROC NameEmployee
+AS
+BEGIN
+    SELECT *
+    FROM tblEmployee
+END
+GO
+
+IF OBJECT_ID('NameEmployee', 'p') IS NOT NULL
+    DROP proc NameEmployee
+GO
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumber int)
+AS
+BEGIN
+    IF EXISTS (SELECT *
+    FROM tblEmployee
+    WHERE EmployeeNumber = @EmployeeNumber)
+    BEGIN
+        SELECT *
+        FROM tblEmployee
+        WHERE EmployeeNumber = @EmployeeNumber
+    -- SELECT 1
+    END
+END
+GO
+
+NameEmployee 13456
+Exec NameEmployee 123
+Execute NameEmployee 123
+
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumber int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber = @EmployeeNumber)
+    BEGIN
+        IF @EmployeeNumber < 300
+        BEGIN
+            SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+            FROM tblEmployee
+            WHERE EmployeeNumber = @EmployeeNumber
+        END
+        
+        ELSE
+        BEGIN
+            SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName, DEpartment
+            FROM tblEmployee 
+            WHERE EmployeeNumber = @EmployeeNumber
+
+            SELECT * FROM tblTransaction WHERE EmployeeNum = @EmployeeNumber
+        END
+    END
+END
+GO
+
+NameEmployee 123
+Exec NameEmployee 321
+Execute NameEmployee 123
+
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+        FROM tblEmployee
+        WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo       
+    END
+END
+GO
+
+NameEmployee 123, 321
+Exec NameEmployee @EmployeeNumberFrom =123, @EmployeeNumberTo = 321
+
+Execute NameEmployee 123
+
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        DECLARE @EmployeeNumber int = @EmployeeNumberFrom
+        WHILE @EmployeeNumber <= @EmployeeNumberTo
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber =  @EmployeeNumber )
+            BEGIN
+            SET @EmployeeNumber = @EmployeeNumber + 1
+            CONTINUE
+            END
+            SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+            FROM tblEmployee
+            WHERE EmployeeNumber =  @EmployeeNumber 
+            SET @EmployeeNumber = @EmployeeNumber + 1
+            -- USE IF condition with BREAK and CONTINUE to control loop
+            IF @EmployeeNumber = 500
+                BREAK
+            CONTINUE
+        END      
+    END
+END
+GO
+NameEmployee 1,2
+NameEmployee 123, 150
+Exec NameEmployee @EmployeeNumberFrom =123, @EmployeeNumberTo = 321
+
+Execute NameEmployee 123
+
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int, @NumberOfRow int OUTPUT)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+        FROM tblEmployee
+        WHERE EmployeeNumber BETWEEN @EmployeeNumberFROM AND @EmployeeNumberTo 
+        SET @NumberOfRow = @@ROWCOUNT  
+    END
+    ELSE
+    BEGIN
+        SET @NumberOfRow = 0
+    END
+END
+GO
+
+DECLARE @NumberOfRow INT
+Exec NameEmployee 1,2, @NumberOfRow OUTPUT
+SELECT @NumberOfRow
+
+DECLARE @NumberOfRow INT
+Exec NameEmployee 123, 130, @NumberOfRow OUTPUT
+SELECT @NumberOfRow
+
+Exec NameEmployee @EmployeeNumberFrom =123, @EmployeeNumberTo = 321
+
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int, @NumberOfRow int OUTPUT)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+        FROM tblEmployee
+        WHERE EmployeeNumber BETWEEN @EmployeeNumberFROM AND @EmployeeNumberTo 
+        SET @NumberOfRow = @@ROWCOUNT  
+        RETURN 1
+    END
+    ELSE
+    BEGIN
+        SET @NumberOfRow = 0
+        RETURN 0
+    END
+END
+GO
+
+DECLARE @NumberOfRow INT, @ReturnStatus INT
+Exec @ReturnStatus = NameEmployee 1,2, @NumberOfRow OUTPUT
+SELECT @NumberOfRow CountRows, @ReturnStatus rowstatus
+
+DECLARE @NumberOfRow INT, @ReturnStatus INT
+Exec @ReturnStatus = NameEmployee 123,130, @NumberOfRow OUTPUT
+SELECT @NumberOfRow AS CountRows, @ReturnStatus AS rowstatus

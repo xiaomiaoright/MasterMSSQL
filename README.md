@@ -581,3 +581,597 @@ CREATE TABLE tblEmployee2 (
     DateOfEntery DateTime NOT NULL CONSTRAINT tblTransaction2_dfDateOfEntry DEFAULT GETDATE()
 )
 ```
+
+### 5.6 Primary Key
+
+- Add Primary Key in a table
+- 
+```sql
+-- Primary key is created default as clustered
+ALTER TABLE tblEmployee
+ADD CONSTRAINT PK_tblEmployee PRIMARY KEY (EmployeeNumber)
+
+-- TO create a non clustered Primary key 
+ALTER TABLE tblEmployee
+ADD CONSTRAINT PK_tblEmployee PRIMARY KEY NONCLUSTERED (EmployeeNumber)
+```
+
+- Create Primary Key with Identity
+
+```sql
+
+CREATE TABLE tblEmployee2
+(
+    EmployeeNumber INT NOT NULL CONSTRAINT PK_tblEmployee2 PRIMARY KEY IDENTITY(1,1),
+    MiddleName nVarchar(20) NULL CONSTRAINT tblEmployee2_chkMiddleName CHECK (REPLACE(MiddleName, '.', '') = MiddleName OR MiddleName IS NULL)
+)
+
+
+INSERT INTO tblEmployee2
+VALUES ('Emily'), -- with Identity 1
+('Tom') -- with identitty 2
+
+SELECT * FROM tblEmployee2
+ --('Emily'),  with Identity 1
+ --('Tom') with identitty 2
+
+-- Delelte Two rows and insert again
+DELETE FROM tblEmployee2
+
+INSERT INTO tblEmployee2
+VALUES ('Emily'),
+('Tom')
+SELECT * FROM tblEmployee2
+-- Now identity is 3 and 4
+
+TRUNCATE TABLE tblEmployee2
+INSERT INTO tblEmployee2
+VALUES ('Emily'),
+('Tom')
+SELECT * FROM tblEmployee2
+-- Now the identity is 1,2 again
+```
+
+- When Manually insert identity
+
+```sql
+-- Try to insert manually the indentity
+INSERT INTO tblEmployee2
+VALUES (3,'Liang'),
+(4, 'Jerry')
+-- result in an error because cannot insert identity when Identity_INSERT is OFF
+
+-- So set IDENTITY_INSERT to ON and insert
+SET IDENTITY_INSERT tblEmployee2 ON
+INSERT INTO tblEmployee2(EmployeeNumber, MiddleName)
+VALUES (3,'Liang'),
+(4, 'Jerry')
+```
+
+- Find out the identity number
+
+```sql
+-- Find the last identity used
+SELECT @@IDENTITY
+SELECT SCOPE_IDENTITY()
+
+-- Find out  last identity used for a specific table
+SELECT IDENT_CURRENT('dbo.tblEmployee2')
+```
+
+### 5.7 Foreign Key
+
+```sql
+BEGIN TRAN
+ALTER TABLE tblTransaction 
+ALTER COLUMN EmployeeNum INT NULL
+
+ALTER TABLE tblTransaction 
+ADD CONSTRAINT tblTransaction_dfEmployeeNum DEFAULT 124 FOR EmployeeNum
+
+ALTER TABLE tblTransaction WITH NOCHECK -- if there is invalid in current data, ignore it
+ADD CONSTRAINT FK_tblTransaction_EmployeeNum FOREIGN KEY (EmployeeNum)
+REFERENCES tblEmployee (EmployeeNumber)
+ON UPDATE CASCADE
+-- when primary key update, foreign key update
+-- Other options: ON UPDATE SET NULL
+ON DELETE NO ACTION
+-- Other options: ON DELETE CASCADE
+-- Other options: ON DELETE SET DEFAULT
+
+
+SELECT e.EmployeeNumber, t.*
+FROM tblEmployee e
+    RIGHT JOIN tblTransaction t
+    ON t.EmployeeNum = e.EmployeeNumber
+WHERE t.Amount IN (-179.47, 786.22)
+
+UPDATE tblEmployee SET EmployeeNumber = 9123 WHERE EmployeeNumber = 123
+
+SELECT e.EmployeeNumber, t.*
+FROM tblEmployee e
+    RIGHT JOIN tblTransaction t
+    ON t.EmployeeNum = e.EmployeeNumber
+WHERE t.Amount IN (-179.47, 786.22)
+
+ROLLBACK TRAN
+```
+
+## 6. Views
+
+### 6.1 Create Views
+
+```sql
+IF EXISTS (SELECT * FROM sys.views WHERE name = 'vw_EmployeeTotalAmount')
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO 
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO
+
+CREATE VIEW vw_EmployeeTotalAmount
+AS
+    SELECT e.EmployeeNumber, ISNULL(SUM(t.Amount), 0) AS TotalAmount
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    GROUP BY e.EmployeeNumber
+GO
+
+SELECT * FROM vw_EmployeeTotalAmount
+```
+
+### 6.2 Alter and drop views
+```sql
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER VIEW [dbo].[vw_EmployeeTotalAmount]
+AS
+    SELECT e.EmployeeNumber, ISNULL(SUM(t.Amount), 0) AS NewTotalAmount
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    GROUP BY e.EmployeeNumber
+GO
+```
+
+Drop view
+
+```sql
+-- find all views from sys
+IF EXISTS (
+SELECT * FROM sys.views WHERE name = 'vw_EmployeeTotalAmount')
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+```
+
+### 6.3 Securing views
+
+- Get view scripts
+
+```sql
+SELECT * FROM sys.views -- with view name and view ID
+
+SELECT * FROM sys.syscomments -- with view id and view script
+
+SELECT v.*, c.text
+FROM sys.views v
+    INNER JOIN sys.syscomments c
+    ON c.id = v.object_id
+
+-- use OBJECT_DEFINITION to get view script
+SELECT OBJECT_ID('dbo.vw_EmployeeTotalAmount'),
+    OBJECT_DEFINITION(OBJECT_ID('dbo.vw_EmployeeTotalAmount'))
+
+-- use sys.sql_modules
+SELECT * FROM sys.sql_modules
+WHERE object_id = OBJECT_ID('dbo.vw_EmployeeTotalAmount')
+```
+
+```sql
+-- Secure view with WITH ENCRYPTION
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeTotalAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeTotalAmount]
+GO
+
+CREATE VIEW vw_EmployeeTotalAmount WITH ENCRYPTION
+AS
+    SELECT e.EmployeeNumber, ISNULL(SUM(t.Amount), 0) AS TotalAmount
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    GROUP BY e.EmployeeNumber
+GO
+
+-- if to get the view script now, it will show null
+SELECT OBJECT_ID('dbo.vw_EmployeeTotalAmount'),
+    OBJECT_DEFINITION(OBJECT_ID('dbo.vw_EmployeeTotalAmount'))
+
+SELECT * FROM sys.sql_modules
+WHERE object_id = OBJECT_ID('dbo.vw_EmployeeTotalAmount')
+
+-- if to get the view script now, it will show null
+SELECT OBJECT_ID('dbo.vw_EmployeeTotalAmount'),
+    OBJECT_DEFINITION(OBJECT_ID('dbo.vw_EmployeeTotalAmount'))
+
+SELECT * FROM sys.sql_modules
+WHERE object_id = OBJECT_ID('dbo.vw_EmployeeTotalAmount')
+```
+
+dbo is schema which means the owner of database, who can access the database
+
+For security reasons, some users are restricted from access specific tables. (Denied SELECT in table)
+
+But they can still access the table data through a view. (Can SELECT in view)
+
+|Object   |User Access   |
+|---|---|
+|dbo.view   |SELECT   |
+|dbo.tbl1   |Denied SELECT   |
+|dbo.tbl2   |Denied SELECT   |
+|Accounting.tbl3   |Denied SELECT   |
+
+#### __View Security check process:__
+
+1. Check the user access to view
+1. If user has access, check the schema of tables within the view (schema of tables in the view) and the schema of the view
+    - IF schema of tables in the view is the same as schema of the view
+        - No need to check the access to the tables in the view
+        - __User can select from view__ no matter user has access to the tables in the view or not
+    - IF they are different
+        - Check the access to the tables in the view
+            - If user has access to the tables in the view, then __User can select from view__ 
+            - If not, __User cannot access the view__
+
+dbo.view is created from dbo.tbl1 and dbo.tbl2. Even though user is restricted from access to dbo.tbl1 and dbo.tbl2, but user can still select from dbo.view as long as dbo.view shares the same schema (dbo) with dbo.tbl1 and dbo.tbl2.
+
+if dbo.view is created from dbo.tbl1, dbo.tbl2 and Accounting.tbl3. AND user is restricted access to Accounting.tbl3, then user cannot select from dbo.view.
+
+### 6.4 Adding new rows to views/Update data in a view
+
+View can be treated as a specific table.
+
+Can insert rows into view if the insert only affects one base table in the view.
+
+Update data in a view
+
+```sql
+
+IF EXISTS (
+    SELECT *
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE table_name = 'vw_EmployeeAmount' AND table_schema = 'dbo'
+)
+    DROP VIEW [dbo].[vw_EmployeeAmount]
+GO
+
+CREATE VIEW vw_EmployeeAmount WITH ENCRYPTION
+AS
+    SELECT e.EmployeeNumber,t.*
+    FROM tblEmployee e
+        RIGHT JOIN tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    WHERE e.EmployeeNumber BETWEEN 90 and 140
+
+WITH CHECK OPTION
+GO
+-- if the view script has filters on EmployeeNumber. For example, EmployeeNumber < 140. 
+-- AND if there is no WITH CHECK OPTION, then now error and the updated rows won't show in the results sincer 1442 > 140.
+-- If there no WITH CHECK OPTION, then it will show error. Before 1442 is out of range 90 -140.
+
+UPDATE dbo.vw_EmployeeAmount
+SET EmployeeNumber = 1442
+WHERE EmployeeNumber = 132
+```
+
+### 6.5 Deleting rows in views
+
+Delete will affect all the tables in the view. If multi-tables in the view, then cannote delete rows from view. 
+
+### 6.6 Create an indexed views
+
+```sql
+IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = 'vw_ViewByDepartment' AND TABLE_SCHEMA = 'dbo')
+    DROP VIEW dbo.vw_ViewByDepartment
+GO
+
+CREATE VIEW dbo.vw_ViewByDepartment WITH SCHEMABINDING
+AS
+    SELECT d.Department, t.EmployeeNum, t.DateOfTransaction, t.Amount
+    FROM dbo.tblDepartment d
+        INNER JOIN dbo.tblEmployee e
+        ON e.Department = d.Department
+        INNER JOIN dbo.tblTransaction t
+        ON t.EmployeeNum = e.EmployeeNumber
+    WHERE t.EmployeeNum BETWEEN 120 AND 139
+GO
+
+-- TO create clustered index, the view must inclue schema (dbo.)
+-- view must not use OUter join, instead inner join only
+-- view msut be SCHEMABINDING, protect the underlining tables from alteration
+-- the columns selected in the index, behave like primary key. So combination need to be unique
+CREATE UNIQUE CLUSTERED INDEX inx_vw_ViewByDpartment ON dbo.vw_ViewByDepartment(EmployeeNum, Department,DateOfTransaction)
+```
+
+## 7. DML Triggers
+
+## 8. Combine Dataset
+
+## 9. Create and Alter stored precedures
+
+### 9.1 Create Precedure
+
+```sql
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+-- Or use OBJECT_ID
+-- IF OBJECT_ID('NameEmployee', 'p') IS NOT NULL
+--     DROP proc NameEmployee
+-- GO
+
+CREATE PROC NameEmployee
+AS
+BEGIN
+    SELECT *
+    FROM tblEmployee
+END
+GO
+
+
+NameEmployee
+Exec NameEmployee
+Execute NameEmployee
+```
+
+- Create Procedure with arguments: Logics
+
+```sql
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumber int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber = @EmployeeNumber)
+    BEGIN
+        SELECT *
+        FROM tblEmployee
+        WHERE EmployeeNumber = @EmployeeNumber
+        -- SELECT 1
+    END
+END
+GO
+
+NameEmployee 13456
+Exec NameEmployee 123
+Execute NameEmployee 123
+```
+
+One of the main difference between view and procedure: view is simply a select statement, while procedure can have logics
+
+- Exercise with IF
+
+```sql
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumber int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber = @EmployeeNumber)
+    BEGIN
+        IF @EmployeeNumber < 300
+        BEGIN
+            SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+            FROM tblEmployee
+            WHERE EmployeeNumber = @EmployeeNumber
+        END
+        
+        ELSE
+        BEGIN
+            SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName, DEpartment
+            FROM tblEmployee 
+            WHERE EmployeeNumber = @EmployeeNumber
+
+            SELECT * FROM tblTransaction WHERE EmployeeNum = @EmployeeNumber
+        END
+    END
+END
+GO
+
+NameEmployee 123
+Exec NameEmployee 321
+```
+
+- Proc with multiple arguments
+
+```sql
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+        FROM tblEmployee
+        WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo       
+    END
+END
+GO
+
+NameEmployee 123, 321
+Exec NameEmployee @EmployeeNumberFrom =123, @EmployeeNumberTo = 321
+```
+
+- Proce Arguments with While
+
+```sql
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        DECLARE @EmployeeNumber int = @EmployeeNumberFrom
+        WHILE @EmployeeNumber <= @EmployeeNumberTo
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber =  @EmployeeNumber )
+            BEGIN
+            SET @EmployeeNumber = @EmployeeNumber + 1
+            CONTINUE
+            END
+            SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+            FROM tblEmployee
+            WHERE EmployeeNumber =  @EmployeeNumber 
+            SET @EmployeeNumber = @EmployeeNumber + 1
+            -- USE IF condition with BREAK and CONTINUE to control loop
+            IF @EmployeeNumber = 500
+                BREAK
+            CONTINUE
+        END      
+    END
+END
+GO
+
+NameEmployee 123, 150
+Exec NameEmployee @EmployeeNumberFrom =123, @EmployeeNumberTo = 321
+```
+
+- Return
+
+```sql
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int, @NumberOfRow int OUTPUT)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+        FROM tblEmployee
+        WHERE EmployeeNumber BETWEEN @EmployeeNumberFROM AND @EmployeeNumberTo 
+        SET @NumberOfRow = @@ROWCOUNT  
+    END
+    ELSE
+    BEGIN
+        SET @NumberOfRow = 0
+    END
+END
+GO
+
+DECLARE @NumberOfRow INT
+Exec NameEmployee 1,2, @NumberOfRow OUTPUT
+SELECT @NumberOfRow
+```
+
+Use Return to indicate exec status
+
+```sql
+
+IF EXISTS (SELECT * FROM SYS.procedures WHERE name = 'NameEmployee')
+    DROP proc NameEmployee
+GO
+
+CREATE PROC NameEmployee (@EmployeeNumberFrom int, @EmployeeNumberTo int, @NumberOfRow int OUTPUT)
+AS
+BEGIN
+    IF EXISTS (SELECT * FROM tblEmployee WHERE EmployeeNumber BETWEEN @EmployeeNumberFrom AND @EmployeeNumberTo)
+    BEGIN
+        SELECT EmployeeNumber, EmployeeFirstName, EmployeeLastName
+        FROM tblEmployee
+        WHERE EmployeeNumber BETWEEN @EmployeeNumberFROM AND @EmployeeNumberTo 
+        SET @NumberOfRow = @@ROWCOUNT  
+        RETURN 1
+    END
+    ELSE
+    BEGIN
+        SET @NumberOfRow = 0
+        RETURN 0
+    END
+END
+GO
+
+DECLARE @NumberOfRow INT, @ReturnStatus INT
+Exec @ReturnStatus = NameEmployee 1,2, @NumberOfRow OUTPUT
+SELECT @NumberOfRow CountRows, @ReturnStatus rowstatus
+
+DECLARE @NumberOfRow INT, @ReturnStatus INT
+Exec @ReturnStatus = NameEmployee 123,130, @NumberOfRow OUTPUT
+SELECT @NumberOfRow AS CountRows, @ReturnStatus AS rowstatus
+```
+
+
+
+
+
+
+
+
+
+
+
+## 10. TRY/CATCH/THROW
+
+## 11. AGGREGATE Query
+
+    ### 11.1 RANKING FUNCTIONS
+    ### 11.2 AAnalytic Functions
+    ### 11.3 GROUPING SEts
+    ### 11.4 Spatial Aggregates
+
+## 12. SUB QUERIES
+
+    ### 12.1 WITH Statement
+    ### 12.2 PIVOTING AND UNPIVOTING
+    ### 12.3 CTE Statement
+
+
+## 13. Functions
+
+## 14. Sononyms and Dynamics
+
+## 15. GUIDs and Sequences
+
+## 16. Query XML Data
+
+## 17 JSON Data
+
+## 18. Temperatry table
+
+## 19. Transcations
+
+## 20. Indexes
+
+## 21. Dynamic Management Views and Function
+
+## 22. Row based operation and set based operation
