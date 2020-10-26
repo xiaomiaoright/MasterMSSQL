@@ -1151,7 +1151,52 @@ SELECT @NumberOfRow AS CountRows, @ReturnStatus AS rowstatus
 
 ## 12. SUB QUERIES
 
-    ### 12.1 WITH Statement
+### 12.1 WITH Statement
+
+- create a list of number
+
+```sql
+with Numbers AS (
+    SELECT TOP 1125 ROW_NUMBER() OVER (ORDER BY (SELECt NULL)) AS RowNumber
+    FROM tblTransaction as U
+)
+SELECT * FROM Numbers
+```
+
+- Group number
+
+```sql
+with Numbers AS (
+    SELECT TOP 1125 ROW_NUMBER() OVER (ORDER BY (SELECt NULL)) AS RowNumber
+    FROM tblTransaction as U
+),
+transaction2014 AS (
+    SELECT * FROM tblTransaction WHERE DateOfTransaction BETWEEN '2014-01-01' AND '2014-12-31'
+),
+tblGap AS (
+    SELECT u.RowNumber,
+LAG(RowNumber) OVER(ORDER BY RowNumber) AS PreviousRowNumber,
+RowNumber - LAG(RowNumber) OVER(ORDER BY RowNumber) AS Current_Previous,
+LEAD(RowNumber) OVEr(ORDER BY RowNumber) AS NextRowNumber,
+LEAD(RowNumber) OVER(ORDER BY RowNumber) - RowNumber AS Next_Current,
+CASE WHEN RowNumber -  LAG(RowNumber) OVER(ORDER BY RowNumber) = 1 THEN 0 ELSE 1 END AS GroupGap
+FROM Numbers u
+LEFT JOIN 
+(SELECT DISTINCT EmployeeNum From tblTransaction) t
+ON t.EmployeeNum = u.RowNumber
+WHERE t.EmployeeNum IS NOT NULL
+),
+tblGroup AS (
+    SELECT *, SUM(GroupGap) OVER(ORDER BY RowNumber) As Groupset
+FROM tblGap
+)
+
+SELECT Groupset, MIN(RowNumber) as StartingEmployeeNumber, MAX(RowNumber) AS EndingEmployeeNumber
+FROM tblGroup
+GROUP BY Groupset
+ORDER BY Groupset
+```
+
     ### 12.2 PIVOTING AND UNPIVOTING
     ### 12.3 CTE Statement
 
