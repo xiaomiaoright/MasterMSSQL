@@ -1198,12 +1198,159 @@ ORDER BY Groupset
 ```
 
     ### 12.2 PIVOTING AND UNPIVOTING
-    ### 12.3 CTE Statement
 
+### 12.3 CTE Statement
+
+```sql
+BEGIN TRAN -- add a new manager table in tblEmployee
+ALTER TABLE tblEmployee
+add Manager int
+GO
+UPDATE tblEmployee
+SET Manager = ((EmployeeNumber - 123) / 10) + 123
+WHERE EmployeeNumber > 123;
+WITH myTable AS (
+    (
+        SELECT EmployeeNumber,
+            EmployeeFirstName,
+            EmployeeLastName,
+            0 AS BossLevel
+        FROM tblEmployee
+        WHERE manager IS NULL
+    )
+    UNION ALL
+    SELECT e.EmployeeNumber,
+        e.EmployeeFirstName,
+        e.EmployeeLastName,
+        t.BossLevel + 1
+    FROM tblEmployee e
+        JOIN myTable t ON e.Manager = t.EmployeeNumber
+)
+SELECT *
+FROM myTable ROLLBACK TRAN
+```
 
 ## 13. Functions
 
+### 13.1 Scalar FUnction
+
+- for one row result in one result, like adding a new column
+- Procedure has to use EXEC, while functions can be used in select statement
+
+```sql
+CREATE FUNCTION AmountPlusOne(@Amount SMALLMONEY) 
+RETURNS SMALLMONEY 
+AS 
+BEGIN
+    RETURN @Amount + 1
+END
+GO
+
+-- use function in select statement
+SELECT *, dbo.AmountPlusOne(Amount)
+FROM tblTransaction
+
+-- use function in Exec
+DECLARE @myValue smallmoney
+EXEC @myValue = dbo.AmountPlusOne 345.67
+SELECT @myValue
+```
+
+### 13.2 Inline Table Function
+
+Returns a table
+
+```sql
+-- do not need to define the table
+-- do not need BEGIN and END
+CREATE FUNCTION TransactionList(@EmployeeNumber INT)
+RETURNS TABLE AS RETURN
+(
+    SELECT *
+    FROM tblTransaction
+    WHERE EmployeeNum = @EmployeeNumber
+)
+
+SELECT * FROM dbo.TransactionList(123)
+
+SELECT * 
+FROM tblEmployee
+WHERE EXISTS(SELECT * FROM dbo.TransactionList(EmployeeNumber))
+
+```
+### 13.3 Multitable function
+
+
+```sql
+CREATE FUNCTION dbo.TransList(@EmployeeNumber INT) 
+RETURNS @TransList TABLE (
+    Amount SMALLMONEY,
+    DateOfEntry smalldatetime,
+    EmployeeNumber INT
+) AS 
+BEGIN
+    -- logics can be set here
+    INSERT INTO @TransList(Amount,DateOfEntry,EmployeeNumber)
+    SELECT Amount,DateOfEntry,EmployeeNum
+    FROM tblTransaction
+    WHERE EmployeeNum = @EmployeeNumber
+    RETURN
+END
+
+SELECT * FROM dbo.TransList(123)
+```
+
+### 13.4 Apply Result Tables of a table function
+
+- cannot use results of a table function in join
+- USe apply instea
+    - OUTER APPLY
+    - CROSS APPLY
+
+- OUTER APPLY
+    - LEFT JOIN
+
+```sql
+SELECT *
+FROM tblEmployee e
+OUTER APPLY dbo.TransList(e.EmployeeNumber) as t
+```
+
+- CROSS APPLY
+    - INNER JOIN
+```sql
+SELECT *
+FROM tblEmployee e
+CROSS APPLY dbo.TransList(e.EmployeeNumber) as t
+```
+
 ## 14. Sononyms and Dynamics
+
+- Sonoyname: short name for table in another server
+- Dynamics
+```sql
+DECLARE @command as varchar(255)
+SET @command = 'SELECT * FROM tblEmployee WHERE EmployeeNumber = 129'
+EXEC (@command)
+```
+
+Bad practice of using command 
+
+```sql
+DECLARE @command as varchar(255), @param as varchar(90)
+SET @command = 'SELECT * FROM tblEmployee WHERE EmployeeNumber = ' 
+SET @param = '129' -- inject sql, bad practice
+EXEC(@command + @param)
+```
+
+Good practice
+
+```sql
+DECLARE @command as nvarchar(255), @param as nvarchar(90)
+SET @command = N'SELECT * FROM tblEmployee WHERE EmployeeNumber = @ProductID' 
+SET @param = N'129'
+EXEC sys.sp_executesql @statement = @command, @params = N'@ProductID INT', @ProductID = @param
+```
 
 ## 15. GUIDs and Sequences
 
@@ -1219,4 +1366,63 @@ ORDER BY Groupset
 
 ## 21. Dynamic Management Views and Function
 
+- dm_db_index_usage_stats
+```sql
+SELECT DB_NAME(ddius.database_id) AS DBName,
+    OBJECT_NAME(ddius.object_id) AS ObjName,
+    i.name AS indexName,
+    ddius.*
+FROM sys.dm_db_index_usage_stats ddius
+    LEFT OUTER JOIN sys.indexes i ON i.object_id = ddius.object_id
+    AND i.index_id = ddius.index_id
+WHERE ddius.database_id = DB_ID()
+```
+
+
+```sql
+SELECT *
+FROM sys.dm_db_index_physical_stats(DB_ID('70-461'), OBJECT_ID('dbo.tblEmployee'), NULL, NULL, 'DETAILED')
+```
+
+
+```sql
+SELECT *
+FROM sys.dm_db_missing_index_details mid
+CROSS APPLY sys.dm_db_missing_index_columns(mid.index_handle)
+INNER JOIN sys.dm_db_missing_index_groups as mig
+ON mig.index_handle = mid.index_handle 
+WHERE database_id = DB_ID()
+ORDER BY column_id
+```
 ## 22. Row based operation and set based operation
+
+### 22.1 Cursor
+
+1. DECLARE
+1. OPEN
+1. FETCH
+1. CLOSE
+1. @@FETCH_STATUS
+
+```sql
+DECLARE @EmployeeID INT
+DECLARE csr CURSOR FOR
+SELECT EmployeeNumber
+FROM [dbo].[tblEmployee]
+WHERE EmployeeNumber BETWEEN 200 and 220
+
+OPEN csr
+FETCH NEXT FROM csr INTO @EmployeeID
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+	SELECT * FROM [dbo].[tblTransaction] WHERE EmployeeNum = @EmployeeID
+	FETCH NEXT FROM csr INTO @EmployeeID
+END
+```
+Disadvantage: Takes time to run
+
+Row-based operation vs. set-based operation
+
+
+### 22.2 UDF
