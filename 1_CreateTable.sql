@@ -12223,3 +12223,31 @@ END
 
 CLOSE csr
 DEALLOCATE csr
+;
+DROP TABLE dbo.tblEmployeeTemporal
+CREATE TABLE dbo.tblEmployeeTemporal
+(
+    EmployeeNumber INT NOT NULL PRIMARY KEY Clustered,
+    EmployeeFirstName VARCHAR(50) NOT NULL,
+    EmployeeLastName VARCHAR(50) NOT NULL,
+    ValidFrom datetime2(2) GENERATED ALWAYS AS ROW START,
+    ValidTo datetime2(2) GENERATED ALWAYS AS ROW END,
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)
+)
+WITH(SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.tblEmployeeTemporalHistory))
+
+INSERT INTO dbo.tblEmployeeTemporal(EmployeeNumber,EmployeeFirstName,EmployeeLastName)
+VALUES (678,'Jame','Lee'),
+(679, 'Lily','Wang'),
+(680, 'Luke','Liu')
+
+SELECT * FROM dbo.tblEmployeeTemporal
+UPDATE dbo.tblEmployeeTemporal SET EmployeeLastName = 'Ji' WHERE EmployeeNumber = 678
+UPDATE dbo.tblEmployeeTemporal SET EmployeeLastName = 'Guan' WHERE EmployeeNumber = 679
+
+
+ALTER TABLE [dbo].[tblEmployee]
+ADD
+	ValidFrom datetime2(2) GENERATED ALWAYS AS ROW START CONSTRAINT df_ValidFrom DEFAULT SYSUTCDATETIME(),
+    ValidTo datetime2(2) GENERATED ALWAYS AS ROW END CONSTRAINT df_ValidTo DEFAULT CONVERT(datetime2(2), '9999-12-31 23:59:59'),
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)

@@ -1131,15 +1131,6 @@ SELECT @NumberOfRow AS CountRows, @ReturnStatus AS rowstatus
 ```
 
 
-
-
-
-
-
-
-
-
-
 ## 10. TRY/CATCH/THROW
 
 ## 11. AGGREGATE Query
@@ -1359,6 +1350,58 @@ EXEC sys.sp_executesql @statement = @command, @params = N'@ProductID INT', @Prod
 ## 17 JSON Data
 
 ## 18. Temperatry table
+
+### 18.1 Create Temporal tables
+
+```sql
+CREATE TABLE c
+(
+    EmployeeNumber INT NOT NULL PRIMARY KEY Clustered,
+    EmployeeFirstName VARCHAR(50) NOT NULL,
+    EmployeeLastName VARCHAR(50) NOT NULL,
+    ValidFrom datetime2(2) GENERATED ALWAYS AS ROW START,
+    ValidTo datetime2(2) GENERATED ALWAYS AS ROW END,
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)
+)
+WITH(SYSTEM_VERSIONING = ON)
+
+INSERT INTO dbo.tblEmployeeTemporal(EmployeeNumber,EmployeeFirstName,EmployeeLastName)
+VALUES (678,'Jame','Lee'),
+(679, 'Lily','Wang'),
+(680, 'Luke','Liu')
+
+SELECT * FROM dbo.tblEmployeeTemporal
+
+UPDATE dbo.tblEmployeeTemporal SET EmployeeLastName = 'Zhang' WHERE EmployeeNumber = 678
+UPDATE dbo.tblEmployeeTemporal SET EmployeeLastName = 'Fan' WHERE EmployeeNumber = 679
+```
+
+Drop temporal tables
+
+    - right click the table drop
+
+```sql
+CREATE TABLE dbo.tblEmployeeTemporal
+(
+    EmployeeNumber INT NOT NULL PRIMARY KEY Clustered,
+    EmployeeFirstName VARCHAR(50) NOT NULL,
+    EmployeeLastName VARCHAR(50) NOT NULL,
+    ValidFrom datetime2(2) GENERATED ALWAYS AS ROW START,
+    ValidTo datetime2(2) GENERATED ALWAYS AS ROW END,
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)
+)
+WITH(SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.tblEmployeeTemporalHistory))
+
+INSERT INTO dbo.tblEmployeeTemporal(EmployeeNumber,EmployeeFirstName,EmployeeLastName)
+VALUES (678,'Jame','Lee'),
+(679, 'Lily','Wang'),
+(680, 'Luke','Liu')
+
+SELECT * FROM dbo.tblEmployeeTemporal
+UPDATE dbo.tblEmployeeTemporal SET EmployeeLastName = 'Ji' WHERE EmployeeNumber = 678
+UPDATE dbo.tblEmployeeTemporal SET EmployeeLastName = 'Guan' WHERE EmployeeNumber = 679
+```
+### 18.2 Alter existing table to temporal tables
 
 ## 19. Transcations
 
